@@ -8,6 +8,7 @@ import {
     isScriptElement,
     isSelectElement,
     isStyleElement,
+    isSVGElementNode,
     isTextareaElement,
     isSlotElement,
     isCustomElement,
@@ -443,10 +444,17 @@ export class DocumentCloner {
         });
 
         anonymousReplacedElement.className = `${PSEUDO_HIDE_ELEMENT_CLASS_BEFORE} ${PSEUDO_HIDE_ELEMENT_CLASS_AFTER}`;
-        clone.className +=
+        const newClassName =
             pseudoElt === PseudoElementType.BEFORE
                 ? ` ${PSEUDO_HIDE_ELEMENT_CLASS_BEFORE}`
                 : ` ${PSEUDO_HIDE_ELEMENT_CLASS_AFTER}`;
+
+        if (isSVGElementNode(clone)) {
+            clone.className.baseValue += newClassName;
+        } else {
+            clone.className += newClassName;
+        }
+
         return anonymousReplacedElement;
     }
 
