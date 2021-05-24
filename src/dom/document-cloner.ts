@@ -5,9 +5,11 @@ import {
     isElementNode,
     isHTMLElementNode,
     isIFrameElement,
+    isImageElement,
     isScriptElement,
     isSelectElement,
     isStyleElement,
+    isSVGElementNode,
     isTextareaElement,
     isSlotElement,
     isCustomElement,
@@ -117,7 +119,7 @@ export class DocumentCloner {
         return iframeLoad;
     }
 
-    createElementClone(node: HTMLElement): HTMLElement {
+    createElementClone<T extends HTMLElement | SVGElement>(node: T): HTMLElement | SVGElement {
         if (isCanvasElement(node)) {
             return this.createCanvasClone(node);
         }
@@ -134,11 +136,18 @@ export class DocumentCloner {
             return this.createCustomElementClone(node);
         }
 
-        return node.cloneNode(false) as HTMLElement;
+        const clone = node.cloneNode(false) as T;
+        // @ts-ignore
+        if (isImageElement(clone) && clone.loading === 'lazy') {
+            // @ts-ignore
+            clone.loading = 'eager';
+        }
+
+        return clone;
     }
 
     // custom elements are cloned as divs so the renderer knows how to render them
-    createCustomElementClone(node: HTMLElement): HTMLElement {
+    createCustomElementClone(node: any): HTMLElement {
         let customDiv = document.createElement('div');
         if (typeof node.getAttributeNames === 'function') {
             let attrNames = node.getAttributeNames();
@@ -278,14 +287,14 @@ export class DocumentCloner {
 
         const window = node.ownerDocument.defaultView;
 
-        if (isHTMLElementNode(node) && window) {
+        if (window && isElementNode(node) && (isHTMLElementNode(node) || isSVGElementNode(node))) {
             const clone = this.createElementClone(node);
 
             const style = window.getComputedStyle(node);
             const styleBefore = window.getComputedStyle(node, ':before');
             const styleAfter = window.getComputedStyle(node, ':after');
 
-            if (this.referenceElement === node) {
+            if (this.referenceElement === node && isHTMLElementNode(clone)) {
                 this.clonedReferenceElement = clone;
             }
             if (isBodyElement(clone)) {
@@ -331,7 +340,7 @@ export class DocumentCloner {
 
             this.counters.pop(counters);
 
-            if (style && this.options.copyStyles && !isIFrameElement(node)) {
+            if (style && (this.options.copyStyles || isSVGElementNode(node)) && !isIFrameElement(node)) {
                 copyCSSStyles(style, clone);
             }
 
@@ -443,10 +452,17 @@ export class DocumentCloner {
         });
 
         anonymousReplacedElement.className = `${PSEUDO_HIDE_ELEMENT_CLASS_BEFORE} ${PSEUDO_HIDE_ELEMENT_CLASS_AFTER}`;
-        clone.className +=
+        const newClassName =
             pseudoElt === PseudoElementType.BEFORE
                 ? ` ${PSEUDO_HIDE_ELEMENT_CLASS_BEFORE}`
                 : ` ${PSEUDO_HIDE_ELEMENT_CLASS_AFTER}`;
+
+        if (isSVGElementNode(clone)) {
+            clone.className.baseValue += newClassName;
+        } else {
+            clone.className += newClassName;
+        }
+
         return anonymousReplacedElement;
     }
 
@@ -504,7 +520,7 @@ const iframeLoader = (iframe: HTMLIFrameElement): Promise<HTMLIFrameElement> => 
     });
 };
 
-export const copyCSSStyles = (style: CSSStyleDeclaration, target: HTMLElement): HTMLElement => {
+export const copyCSSStyles = <T extends HTMLElement | SVGElement>(style: CSSStyleDeclaration, target: T): T => {
     // Edge does not provide value for cssText
     for (let i = style.length - 1; i >= 0; i--) {
         const property = style.item(i);
