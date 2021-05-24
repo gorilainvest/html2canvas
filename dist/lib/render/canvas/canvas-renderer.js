@@ -96,6 +96,9 @@ var CanvasRenderer = /** @class */ (function () {
     };
     CanvasRenderer.prototype.applyEffect = function (effect) {
         this.ctx.save();
+        if (effects_1.isOpacityEffect(effect)) {
+            this.ctx.globalAlpha = effect.opacity;
+        }
         if (effects_1.isTransformEffect(effect)) {
             this.ctx.translate(effect.offsetX, effect.offsetY);
             this.ctx.transform(effect.matrix[0], effect.matrix[1], effect.matrix[2], effect.matrix[3], effect.matrix[4], effect.matrix[5]);
@@ -119,7 +122,6 @@ var CanvasRenderer = /** @class */ (function () {
                     case 0:
                         styles = stack.element.container.styles;
                         if (!styles.isVisible()) return [3 /*break*/, 2];
-                        this.ctx.globalAlpha = styles.opacity;
                         return [4 /*yield*/, this.renderStackContent(stack)];
                     case 1:
                         _a.sent();

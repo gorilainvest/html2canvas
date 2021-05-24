@@ -18,8 +18,8 @@ export declare class DocumentCloner {
     private quoteDepth;
     constructor(element: HTMLElement, options: CloneConfigurations);
     toIFrame(ownerDocument: Document, windowSize: Bounds): Promise<HTMLIFrameElement>;
-    createElementClone(node: HTMLElement): HTMLElement;
-    createCustomElementClone(node: HTMLElement): HTMLElement;
+    createElementClone<T extends HTMLElement | SVGElement>(node: T): HTMLElement | SVGElement;
+    createCustomElementClone(node: any): HTMLElement;
     createStyleClone(node: HTMLStyleElement): HTMLStyleElement;
     createCanvasClone(canvas: HTMLCanvasElement): HTMLImageElement | HTMLCanvasElement;
     cloneNode(node: Node): Node;
@@ -30,5 +30,5 @@ declare enum PseudoElementType {
     BEFORE = 0,
     AFTER = 1
 }
-export declare const copyCSSStyles: (style: CSSStyleDeclaration, target: HTMLElement) => HTMLElement;
+export declare const copyCSSStyles: <T extends HTMLElement | SVGElement>(style: CSSStyleDeclaration, target: T) => T;
 export {};

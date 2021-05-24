@@ -1,5 +1,5 @@
 /*!
- * html2canvas 1.0.0-rc.5 <https://html2canvas.hertzen.com>
+ * html2canvas 1.0.0-rc.7 <https://html2canvas.hertzen.com>
  * Copyright (c) 2021 Niklas von Hertzen <https://hertzen.com>
  * Released under MIT License
  */
@@ -3790,11 +3790,28 @@
         prefix: false,
         type: PropertyDescriptorParsingType.LIST,
         parse: function (tokens) {
-            return tokens.filter(isStringToken$1).map(function (token) { return token.value; });
+            var accumulator = [];
+            var results = [];
+            tokens.forEach(function (token) {
+                switch (token.type) {
+                    case TokenType.IDENT_TOKEN:
+                    case TokenType.STRING_TOKEN:
+                        accumulator.push(token.value);
+                        break;
+                    case TokenType.NUMBER_TOKEN:
+                        accumulator.push(token.number.toString());
+                        break;
+                    case TokenType.COMMA_TOKEN:
+                        results.push(accumulator.join(' '));
+                        accumulator.length = 0;
+                        break;
+                }
+            });
+            if (accumulator.length) {
+                results.push(accumulator.join(' '));
+            }
+            return results.map(function (result) { return (result.indexOf(' ') === -1 ? result : "'" + result + "'"); });
         }
-    };
-    var isStringToken$1 = function (token) {
-        return token.type === TokenType.STRING_TOKEN || token.type === TokenType.IDENT_TOKEN;
     };
 
     var fontSize = {
@@ -4524,7 +4541,10 @@
     var isTextNode = function (node) { return node.nodeType === Node.TEXT_NODE; };
     var isElementNode = function (node) { return node.nodeType === Node.ELEMENT_NODE; };
     var isHTMLElementNode = function (node) {
-        return typeof node.style !== 'undefined';
+        return isElementNode(node) && typeof node.style !== 'undefined' && !isSVGElementNode(node);
+    };
+    var isSVGElementNode = function (element) {
+        return typeof element.className === 'object';
     };
     var isLIElement = function (node) { return node.tagName === 'LI'; };
     var isOLElement = function (node) { return node.tagName === 'OL'; };
@@ -5097,7 +5117,13 @@
             if (isCustomElement(node)) {
                 return this.createCustomElementClone(node);
             }
-            return node.cloneNode(false);
+            var clone = node.cloneNode(false);
+            // @ts-ignore
+            if (isImageElement(clone) && clone.loading === 'lazy') {
+                // @ts-ignore
+                clone.loading = 'eager';
+            }
+            return clone;
         };
         // custom elements are cloned as divs so the renderer knows how to render them
         DocumentCloner.prototype.createCustomElementClone = function (node) {
@@ -5235,12 +5261,12 @@
                 return node.cloneNode(false);
             }
             var window = node.ownerDocument.defaultView;
-            if (isHTMLElementNode(node) && window) {
+            if (window && isElementNode(node) && (isHTMLElementNode(node) || isSVGElementNode(node))) {
                 var clone = this.createElementClone(node);
                 var style = window.getComputedStyle(node);
                 var styleBefore = window.getComputedStyle(node, ':before');
                 var styleAfter = window.getComputedStyle(node, ':after');
-                if (this.referenceElement === node) {
+                if (this.referenceElement === node && isHTMLElementNode(clone)) {
                     this.clonedReferenceElement = clone;
                 }
                 if (isBodyElement(clone)) {
@@ -5277,7 +5303,7 @@
                     clone.appendChild(after);
                 }
                 this.counters.pop(counters);
-                if (style && this.options.copyStyles && !isIFrameElement(node)) {
+                if (style && (this.options.copyStyles || isSVGElementNode(node)) && !isIFrameElement(node)) {
                     copyCSSStyles(style, clone);
                 }
                 //this.inlineAllImages(clone);
@@ -5363,10 +5389,15 @@
                 }
             });
             anonymousReplacedElement.className = PSEUDO_HIDE_ELEMENT_CLASS_BEFORE + " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
-            clone.className +=
-                pseudoElt === PseudoElementType.BEFORE
-                    ? " " + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE
-                    : " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
+            var newClassName = pseudoElt === PseudoElementType.BEFORE
+                ? " " + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE
+                : " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
+            if (isSVGElementNode(clone)) {
+                clone.className.baseValue += newClassName;
+            }
+            else {
+                clone.className += newClassName;
+            }
             return anonymousReplacedElement;
         };
         DocumentCloner.destroy = function (container) {
@@ -5603,7 +5634,7 @@
                     : new Vector(bounds.left + borderLeftWidth, bounds.top + borderTopWidth);
             this.topRightPaddingBox =
                 trh > 0 || trv > 0
-                    ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width + borderLeftWidth), bounds.top + borderTopWidth, topWidth > bounds.width + borderLeftWidth ? 0 : trh - borderLeftWidth, trv - borderTopWidth, CORNER.TOP_RIGHT)
+                    ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width + borderLeftWidth), bounds.top + borderTopWidth, topWidth > bounds.width + borderRightWidth ? 0 : trh - borderRightWidth, trv - borderTopWidth, CORNER.TOP_RIGHT)
                     : new Vector(bounds.left + bounds.width - borderRightWidth, bounds.top + borderTopWidth);
             this.bottomRightPaddingBox =
                 brh > 0 || brv > 0
@@ -5680,10 +5711,10 @@
     var TransformEffect = /** @class */ (function () {
         function TransformEffect(offsetX, offsetY, matrix) {
             this.type = 0 /* TRANSFORM */;
+            this.target = 2 /* BACKGROUND_BORDERS */ | 4 /* CONTENT */;
             this.offsetX = offsetX;
             this.offsetY = offsetY;
             this.matrix = matrix;
-            this.target = 2 /* BACKGROUND_BORDERS */ | 4 /* CONTENT */;
         }
         return TransformEffect;
     }());
@@ -5695,10 +5726,19 @@
         }
         return ClipEffect;
     }());
+    var OpacityEffect = /** @class */ (function () {
+        function OpacityEffect(opacity) {
+            this.type = 2 /* OPACITY */;
+            this.target = 2 /* BACKGROUND_BORDERS */ | 4 /* CONTENT */;
+            this.opacity = opacity;
+        }
+        return OpacityEffect;
+    }());
     var isTransformEffect = function (effect) {
         return effect.type === 0 /* TRANSFORM */;
     };
     var isClipEffect = function (effect) { return effect.type === 1 /* CLIP */; };
+    var isOpacityEffect = function (effect) { return effect.type === 2 /* OPACITY */; };
 
     var StackingContext = /** @class */ (function () {
         function StackingContext(container) {
@@ -5718,6 +5758,9 @@
             this.container = element;
             this.effects = parentStack.slice(0);
             this.curves = new BoundCurves(element);
+            if (element.styles.opacity < 1) {
+                this.effects.push(new OpacityEffect(element.styles.opacity));
+            }
             if (element.styles.transform !== null) {
                 var offsetX = element.bounds.left + element.styles.transformOrigin[0].number;
                 var offsetY = element.bounds.top + element.styles.transformOrigin[1].number;
@@ -5780,7 +5823,7 @@
                     else if (order_1 > 0) {
                         var index_2 = 0;
                         parentStack.positiveZIndex.some(function (current, i) {
-                            if (order_1 > current.element.container.styles.zIndex.order) {
+                            if (order_1 >= current.element.container.styles.zIndex.order) {
                                 index_2 = i + 1;
                                 return false;
                             }
@@ -6146,6 +6189,9 @@
         };
         CanvasRenderer.prototype.applyEffect = function (effect) {
             this.ctx.save();
+            if (isOpacityEffect(effect)) {
+                this.ctx.globalAlpha = effect.opacity;
+            }
             if (isTransformEffect(effect)) {
                 this.ctx.translate(effect.offsetX, effect.offsetY);
                 this.ctx.transform(effect.matrix[0], effect.matrix[1], effect.matrix[2], effect.matrix[3], effect.matrix[4], effect.matrix[5]);
@@ -6169,7 +6215,6 @@
                         case 0:
                             styles = stack.element.container.styles;
                             if (!styles.isVisible()) return [3 /*break*/, 2];
-                            this.ctx.globalAlpha = styles.opacity;
                             return [4 /*yield*/, this.renderStackContent(stack)];
                         case 1:
                             _a.sent();
@@ -6935,7 +6980,9 @@
         if (options === void 0) { options = {}; }
         return renderElement(element, options);
     };
-    CacheStorage.setContext(window);
+    if (typeof window !== 'undefined') {
+        CacheStorage.setContext(window);
+    }
     var renderElement = function (element, opts) { return __awaiter(_this, void 0, void 0, function () {
         var ownerDocument, defaultView, instanceName, _a, width, height, left, top, defaultResourceOptions, resourceOptions, defaultOptions, options, windowBounds, documentCloner, clonedElement, container, documentBackgroundColor, bodyBackgroundColor, bgColor, defaultBackgroundColor, backgroundColor, renderOptions, canvas, renderer, root, renderer;
         return __generator(this, function (_b) {

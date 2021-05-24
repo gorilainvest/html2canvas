@@ -127,7 +127,13 @@ var DocumentCloner = /** @class */ (function () {
         if (node_parser_1.isCustomElement(node)) {
             return this.createCustomElementClone(node);
         }
-        return node.cloneNode(false);
+        var clone = node.cloneNode(false);
+        // @ts-ignore
+        if (node_parser_1.isImageElement(clone) && clone.loading === 'lazy') {
+            // @ts-ignore
+            clone.loading = 'eager';
+        }
+        return clone;
     };
     // custom elements are cloned as divs so the renderer knows how to render them
     DocumentCloner.prototype.createCustomElementClone = function (node) {
@@ -265,12 +271,12 @@ var DocumentCloner = /** @class */ (function () {
             return node.cloneNode(false);
         }
         var window = node.ownerDocument.defaultView;
-        if (node_parser_1.isHTMLElementNode(node) && window) {
+        if (window && node_parser_1.isElementNode(node) && (node_parser_1.isHTMLElementNode(node) || node_parser_1.isSVGElementNode(node))) {
             var clone = this.createElementClone(node);
             var style = window.getComputedStyle(node);
             var styleBefore = window.getComputedStyle(node, ':before');
             var styleAfter = window.getComputedStyle(node, ':after');
-            if (this.referenceElement === node) {
+            if (this.referenceElement === node && node_parser_1.isHTMLElementNode(clone)) {
                 this.clonedReferenceElement = clone;
             }
             if (node_parser_1.isBodyElement(clone)) {
@@ -307,7 +313,7 @@ var DocumentCloner = /** @class */ (function () {
                 clone.appendChild(after);
             }
             this.counters.pop(counters);
-            if (style && this.options.copyStyles && !node_parser_1.isIFrameElement(node)) {
+            if (style && (this.options.copyStyles || node_parser_1.isSVGElementNode(node)) && !node_parser_1.isIFrameElement(node)) {
                 exports.copyCSSStyles(style, clone);
             }
             //this.inlineAllImages(clone);
@@ -396,10 +402,15 @@ var DocumentCloner = /** @class */ (function () {
             }
         });
         anonymousReplacedElement.className = PSEUDO_HIDE_ELEMENT_CLASS_BEFORE + " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
-        clone.className +=
-            pseudoElt === PseudoElementType.BEFORE
-                ? " " + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE
-                : " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
+        var newClassName = pseudoElt === PseudoElementType.BEFORE
+            ? " " + PSEUDO_HIDE_ELEMENT_CLASS_BEFORE
+            : " " + PSEUDO_HIDE_ELEMENT_CLASS_AFTER;
+        if (node_parser_1.isSVGElementNode(clone)) {
+            clone.className.baseValue += newClassName;
+        }
+        else {
+            clone.className += newClassName;
+        }
         return anonymousReplacedElement;
     };
     DocumentCloner.destroy = function (container) {

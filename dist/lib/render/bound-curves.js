@@ -61,7 +61,7 @@ var BoundCurves = /** @class */ (function () {
                 : new vector_1.Vector(bounds.left + borderLeftWidth, bounds.top + borderTopWidth);
         this.topRightPaddingBox =
             trh > 0 || trv > 0
-                ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width + borderLeftWidth), bounds.top + borderTopWidth, topWidth > bounds.width + borderLeftWidth ? 0 : trh - borderLeftWidth, trv - borderTopWidth, CORNER.TOP_RIGHT)
+                ? getCurvePoints(bounds.left + Math.min(topWidth, bounds.width + borderLeftWidth), bounds.top + borderTopWidth, topWidth > bounds.width + borderRightWidth ? 0 : trh - borderRightWidth, trv - borderTopWidth, CORNER.TOP_RIGHT)
                 : new vector_1.Vector(bounds.left + bounds.width - borderRightWidth, bounds.top + borderTopWidth);
         this.bottomRightPaddingBox =
             brh > 0 || brv > 0
